@@ -17,6 +17,8 @@ import NullClientSocket from '#/server/NullClientSocket.js';
 
 import { LoggerEventType } from '#/server/logger/LoggerEventType.js';
 
+import { registerDiscordAuth } from '#/server/login/DiscordAuth.js';
+
 import WSClientSocket from '#/server/ws/WSClientSocket.js';
 
 import Environment from '#/util/Environment.js';
@@ -300,6 +302,8 @@ if (Environment.node.debug) {
 fastify.register(FastifyStatic, {
     root: path.join(process.cwd(), 'public')
 });
+
+registerDiscordAuth(fastify);
 
 export async function startWeb() {
     await fastify.listen({ port: Environment.web.port, host: '0.0.0.0' });

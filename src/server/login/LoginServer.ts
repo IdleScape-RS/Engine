@@ -224,7 +224,22 @@ export default class LoginServer {
                                     .executeTakeFirst();
                             }
 
-                            if (!account || !(await bcrypt.compare(password.toLowerCase(), account.password))) {
+                            // Idlescape: the web client sends a single-use token from /auth/session instead of a password.
+                            const session = await db.selectFrom('account_session').selectAll().where('game_token', '=', password).executeTakeFirst();
+
+                            if (session) {
+                                if (!account || session.account_id !== account.id || new Date(session.expires_at) <= new Date()) {
+                                    s.send(
+                                        JSON.stringify({
+                                            replyTo,
+                                            response: 1
+                                        })
+                                    );
+                                    return;
+                                }
+
+                                await db.updateTable('account_session').set({ game_token: null }).where('web_token', '=', session.web_token).execute();
+                            } else if (!account || !(await bcrypt.compare(password.toLowerCase(), account.password))) {
                                 // invalid username or password
                                 s.send(
                                     JSON.stringify({

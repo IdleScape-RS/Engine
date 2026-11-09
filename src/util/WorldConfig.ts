@@ -13,6 +13,12 @@ export interface WorldConfig {
         allowedOrigin: string;
         managementPort: number;
     };
+    discord: {
+        enabled: boolean;
+        clientId: string;
+        clientSecret: string;
+        redirectUrl: string;
+    };
     engine: {
         revision: number;
     };
@@ -86,6 +92,12 @@ export function createDefaultWorldConfig(): WorldConfig {
             port: process.platform === 'win32' || process.platform === 'darwin' ? 80 : 8888,
             allowedOrigin: '',
             managementPort: 8898
+        },
+        discord: {
+            enabled: false,
+            clientId: '',
+            clientSecret: '',
+            redirectUrl: ''
         },
         engine: {
             revision: 274
