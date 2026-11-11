@@ -92,7 +92,7 @@ import {
 import Environment from '#/util/Environment.js';
 import { fromBase37, toBase37, toSafeName } from '#/util/JString.js';
 import LinkList from '#/datastruct/LinkList.js';
-import { printDebug, printError, printInfo } from '#/util/Logger.js';
+import { printDebug, printError, printInfo, printWarning } from '#/util/Logger.js';
 import OnDemand from './OnDemand.js';
 import { ObjDelayedRequest } from './entity/ObjDelayedRequest.js';
 import DbTableIndex from '#/cache/config/DbTableIndex.js';
@@ -123,10 +123,6 @@ class World {
 
     private static readonly PLAYER_SAVERATE: number = 1500; // 15m autosave
     private static readonly PLAYER_COORDLOGRATE: number = 50; // 30s server check-in
-
-    private static readonly AFK_EVENTRATE: number = 500; // 5m: 60/5 = 12 chances per hour
-    private static readonly AFK_CHANCE1: number = 1 / (120 / 5); // 1/24 - 4% chance every 5 mins: avg 1 event every 2 hrs
-    private static readonly AFK_CHANCE2: number = 1 / (60 / 5); // 1/12 - 8% chance every 5 mins: avg 1 event every 1 hr while "aggro zone" hasn't changed
 
     private static readonly TIMEOUT_NO_CONNECTION: number = 50; // 30s with no connection (16 ticks in osrs)
     private static readonly TIMEOUT_NO_RESPONSE: number = 100; // 60s without any response
@@ -607,9 +603,8 @@ class World {
             try {
                 player.playtime++;
 
-                if (this.currentTick % World.AFK_EVENTRATE === 0) {
-                    player.afkEventReady = Math.random() < (player.zonesAfk() ? World.AFK_CHANCE2 : World.AFK_CHANCE1);
-                }
+                // Idlescape: random events are off. Nothing ever rolls an afk event, so the
+                // afk_event script opcode always reports false and no skill interrupts the player.
 
                 // - client input tracking
                 player.processInputTracking();
@@ -1844,6 +1839,7 @@ class World {
             const { reply } = msg;
             const client = this.loginRequests.get(socket)!;
             this.loginRequests.delete(socket);
+            printDebug(`login server reply ${reply} for ${msg.username}`);
 
             if (reply === -1) {
                 // login server offline
@@ -2157,6 +2153,7 @@ class World {
                 rev = World.loginBuf.g2();
             }
             if (rev !== Environment.engine.revision) {
+                printWarning(`Login rejected (client out of date): client revision ${rev}, server revision ${Environment.engine.revision}`);
                 client.send(Uint8Array.from([6]));
                 client.close();
                 return;
@@ -2168,7 +2165,10 @@ class World {
             const crcs = new Uint8Array(9 * 4);
             World.loginBuf.gdata(crcs, 0, crcs.length);
 
-            if (CrcBuffer32 !== Packet.getcrc(crcs, 0, crcs.length)) {
+            const clientCrc = Packet.getcrc(crcs, 0, crcs.length);
+            if (CrcBuffer32 !== clientCrc) {
+                // The client only ends up here with a stale copy of /crc, e.g. after the cache was rebuilt.
+                printWarning(`Login rejected (cache out of date): client crc ${clientCrc}, server crc ${CrcBuffer32}. The client needs a full page reload.`);
                 client.send(Uint8Array.from([6]));
                 client.close();
                 return;
@@ -2176,9 +2176,12 @@ class World {
 
             World.loginBuf.rsadec(priv);
 
-            if (World.loginBuf.g1() !== 10) {
-                // RSA error
-                // sending out of date intentionally
+            const rsaOpcode = World.loginBuf.g1();
+            const plainHead = World.loginBuf.data.slice(0, 8).join(',');
+            if (rsaOpcode !== 10) {
+                // The web client encrypts with the modulus/exponent from /publickey; a mismatch here means
+                // it is running an old bundle, or the server's private.pem was replaced since it loaded.
+                printWarning(`Login rejected (rsa mismatch): expected opcode 10 after decrypt, got ${rsaOpcode} (head ${plainHead}). Client key != data/config/private.pem.`);
                 client.send(Uint8Array.from([6]));
                 client.close();
                 return;

@@ -224,8 +224,9 @@ export default class LoginServer {
                                     .executeTakeFirst();
                             }
 
-                            // Idlescape: the web client sends a single-use token from /auth/session instead of a password.
+                            // Idlescape: the web client sends a single-use token from /discord/session instead of a password.
                             const session = await db.selectFrom('account_session').selectAll().where('game_token', '=', password).executeTakeFirst();
+                            printInfo(`Login: ${safeName} passwordLength=${password.length} account=${account ? account.id : 'none'} sessionMatch=${session ? 'yes' : 'no'}`);
 
                             if (session) {
                                 if (!account || session.account_id !== account.id || new Date(session.expires_at) <= new Date()) {

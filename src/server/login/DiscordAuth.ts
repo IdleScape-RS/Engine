@@ -5,6 +5,7 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 
 import { db, toDbDate } from '#/db/query.js';
 import Environment from '#/util/Environment.js';
+import { printInfo } from '#/util/Logger.js';
 import { toSafeName } from '#/util/JString.js';
 
 /**
@@ -27,8 +28,14 @@ type DiscordUser = {
     global_name: string | null;
 };
 
+/**
+ * 15 bytes as base64url, i.e. exactly 20 characters. The game token is sent to the world as the
+ * login packet's password, and that field is capped at 20 characters (World.ts), so a longer token
+ * is silently reported to the player as "Invalid username or password". 120 bits is ample for a
+ * single-use token with a 30 day expiry.
+ */
 function randomToken(): string {
-    return crypto.randomBytes(32).toString('hex');
+    return crypto.randomBytes(15).toString('base64url');
 }
 
 function cookie(req: FastifyRequest, name: string): string | null {
@@ -109,8 +116,36 @@ async function accountForDiscordUser(user: DiscordUser) {
     return created;
 }
 
+/**
+ * The browser session behind the cookie, or null. Discord is the only way in, so the game page uses
+ * this to send anyone without a session straight to Discord instead of loading a client they cannot log into.
+ */
+export async function sessionFor(req: FastifyRequest): Promise<{ web_token: string; account_id: number; username: string } | null> {
+    const webToken = cookie(req, SESSION_COOKIE);
+    if (!webToken) {
+        return null;
+    }
+
+    const session = await db
+        .selectFrom('account_session')
+        .innerJoin('account', 'account.id', 'account_session.account_id')
+        .select(['account_session.web_token', 'account_session.account_id', 'account_session.expires_at', 'account.username'])
+        .where('account_session.web_token', '=', webToken)
+        .executeTakeFirst();
+
+    if (!session || new Date(session.expires_at) <= new Date()) {
+        return null;
+    }
+
+    return { web_token: session.web_token, account_id: session.account_id, username: session.username };
+}
+
 export function registerDiscordAuth(fastify: FastifyInstance) {
-    fastify.get('/auth/discord', async (_req, reply) => {
+    // The redirect URI must match the Discord application's "Redirects" list character for character.
+    // Print it at boot so a mismatch is one glance away instead of a cryptic Discord error page.
+    printInfo(`Discord login: ${Environment.discord.enabled ? 'enabled' : 'disabled'}, redirect URI ${Environment.discord.redirectUrl}`);
+
+    fastify.get('/discord', async (_req, reply) => {
         if (!Environment.discord.enabled) {
             return reply.status(503).type('text/html').send(loginErrorMessage('Discord login is not configured.'));
         }
@@ -124,12 +159,13 @@ export function registerDiscordAuth(fastify: FastifyInstance) {
         url.searchParams.set('scope', 'identify');
         url.searchParams.set('redirect_uri', Environment.discord.redirectUrl);
         url.searchParams.set('state', state);
-        url.searchParams.set('prompt', 'none');
+        // No prompt param on purpose: `prompt=none` turns the first sign-in into a silent
+        // consent_required error instead of showing Discord's authorise screen.
 
         return reply.redirect(url.toString(), 302);
     });
 
-    fastify.get<{ Querystring: { code?: string; state?: string; error?: string } }>('/auth/discord/callback', async (req, reply) => {
+    fastify.get<{ Querystring: { code?: string; state?: string; error?: string } }>('/discord/callback', async (req, reply) => {
         const expectedState = cookie(req, STATE_COOKIE);
         if (req.query.error) {
             return reply.status(400).type('text/html').send(loginErrorMessage(req.query.error));
@@ -178,30 +214,19 @@ export function registerDiscordAuth(fastify: FastifyInstance) {
         return reply.redirect('/rs2.cgi', 302);
     });
 
-    fastify.get('/auth/session', async (req, reply) => {
-        const webToken = cookie(req, SESSION_COOKIE);
-        if (!webToken) {
+    fastify.get('/discord/session', async (req, reply) => {
+        const session = await sessionFor(req);
+        if (!session) {
             return reply.status(401).send({ error: 'not signed in' });
         }
 
-        const session = await db
-            .selectFrom('account_session')
-            .innerJoin('account', 'account.id', 'account_session.account_id')
-            .select(['account_session.web_token', 'account_session.expires_at', 'account.username'])
-            .where('account_session.web_token', '=', webToken)
-            .executeTakeFirst();
-
-        if (!session || new Date(session.expires_at) <= new Date()) {
-            return reply.status(401).send({ error: 'session expired' });
-        }
-
         const gameToken = randomToken();
-        await db.updateTable('account_session').set({ game_token: gameToken }).where('web_token', '=', webToken).executeTakeFirstOrThrow();
+        await db.updateTable('account_session').set({ game_token: gameToken }).where('web_token', '=', session.web_token).executeTakeFirstOrThrow();
 
         return { username: session.username, token: gameToken };
     });
 
-    fastify.get('/auth/logout', async (req, reply) => {
+    fastify.get('/discord/logout', async (req, reply) => {
         const webToken = cookie(req, SESSION_COOKIE);
         if (webToken) {
             await db.deleteFrom('account_session').where('web_token', '=', webToken).execute();

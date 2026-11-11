@@ -229,17 +229,13 @@ export default class Packet extends DoublyLinkable {
 
     g3(): number {
         this.pos += 3;
-        return (this.data[this.pos - 3] << 16) +
-            (this.data[this.pos - 2] << 8) +
-            this.data[this.pos - 1];
+        return (this.data[this.pos - 3] << 16) + (this.data[this.pos - 2] << 8) + this.data[this.pos - 1];
     }
 
     g3s() {
         this.pos += 3;
-        const v = (this.data[this.pos - 3] << 16) +
-            (this.data[this.pos - 2] << 8) +
-            this.data[this.pos - 1];
-        return v > 0xFFFFFF ? v - 0x1000000 : v;
+        const v = (this.data[this.pos - 3] << 16) + (this.data[this.pos - 2] << 8) + this.data[this.pos - 1];
+        return v > 0xffffff ? v - 0x1000000 : v;
     }
 
     g4(): number {
@@ -293,7 +289,7 @@ export default class Packet extends DoublyLinkable {
         let result = 0;
 
         while ((byte & 0x80) !== 0) {
-            result = (result | (byte & 0x7F)) << 7;
+            result = (result | (byte & 0x7f)) << 7;
             byte = this.view.getUint8(this.pos++);
         }
 
@@ -386,10 +382,10 @@ export default class Packet extends DoublyLinkable {
     }
 
     pVarInt(value: number) {
-        if ((value & 0xFFFFFF80) != 0) {
-            if ((value & 0xFFFFC000) != 0) {
-                if ((value & 0xFFE00000) != 0) {
-                    if ((value & 0xF0000000) != 0) {
+        if ((value & 0xffffff80) != 0) {
+            if ((value & 0xffffc000) != 0) {
+                if ((value & 0xffe00000) != 0) {
+                    if ((value & 0xf0000000) != 0) {
                         this.view.setUint8(this.pos++, (value >>> 28) | 0x80);
                     }
 
@@ -402,7 +398,7 @@ export default class Packet extends DoublyLinkable {
             this.view.setUint8(this.pos++, (value >>> 7) | 0x80);
         }
 
-        this.view.setUint8(this.pos++, value & 0x7F);
+        this.view.setUint8(this.pos++, value & 0x7f);
     }
 
     bitStart(): void {
@@ -459,7 +455,9 @@ export default class Packet extends DoublyLinkable {
         const dec: Uint8Array = new Uint8Array(length);
         this.gdata(dec, 0, dec.length);
 
-        const bigRaw: BigInteger = new BigInteger(Array.from(dec));
+        // The leading 0 matters: jsbn parses a byte array as two's complement, so without it any
+        // value whose top bit is set is read as negative and encrypts to the wrong number.
+        const bigRaw: BigInteger = new BigInteger([0, ...Array.from(dec)]);
         const rawEnc: Uint8Array = Uint8Array.from(bigRaw.modPow(pem.e, pem.n).toByteArray());
 
         this.pos = 0;
@@ -471,7 +469,9 @@ export default class Packet extends DoublyLinkable {
         const enc: Uint8Array = new Uint8Array(this.g1());
         this.gdata(enc, 0, enc.length);
 
-        const cipher: BigInteger = new BigInteger(Array.from(enc));
+        // Same two's complement trap as in rsaenc: a ciphertext whose top bit is set would be read
+        // as negative and decrypt to garbage, which the caller sees as "client out of date".
+        const cipher: BigInteger = new BigInteger([0, ...Array.from(enc)]);
 
         // decrypt using the Chinese Remainder Theorem
         const p: BigInteger = pem.p;

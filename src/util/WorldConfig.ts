@@ -147,7 +147,9 @@ export function createDefaultWorldConfig(): WorldConfig {
         build: {
             verbose: false,
             startup: false,
-            verify: true,
+            // Idlescape content intentionally differs from upstream (names, costs, tree behaviour), so the
+            // upstream config checksums can never match. Set this back to true if you ever want that guard.
+            verify: false,
             verifyFolder: true,
             verifyPack: true,
             liveReload: true,
@@ -239,6 +241,12 @@ function migrateFromLegacyEnv(defaults: WorldConfig, env: Record<string, string>
     config.web.port = tryParseInt(env.WEB_PORT, config.web.port);
     config.web.allowedOrigin = tryParseString(env.WEB_ALLOWED_ORIGIN, config.web.allowedOrigin);
     config.web.managementPort = tryParseInt(env.WEB_MANAGEMENT_PORT, config.web.managementPort);
+
+    // Deployments should keep the Discord secret out of world.json; the redirect URI differs per host.
+    config.discord.enabled = tryParseBoolean(env.DISCORD_ENABLED, config.discord.enabled);
+    config.discord.clientId = tryParseString(env.DISCORD_CLIENT_ID, config.discord.clientId);
+    config.discord.clientSecret = tryParseString(env.DISCORD_CLIENT_SECRET, config.discord.clientSecret);
+    config.discord.redirectUrl = tryParseString(env.DISCORD_REDIRECT_URL, config.discord.redirectUrl);
 
     config.engine.revision = tryParseInt(env.ENGINE_REVISION, config.engine.revision);
 

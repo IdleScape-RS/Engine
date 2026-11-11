@@ -183,6 +183,75 @@ export default class ClientCheatHandler extends ClientGameMessageHandler<ClientC
                 player.messageGame(`Naive move strategy: ${player.moveStrategy === MoveStrategy.NAIVE ? 'naive' : 'smart'}`);
             } else if (cmd === 'random') {
                 player.afkEventReady = true;
+            } else if (cmd === 'ids') {
+                // Idlescape dev tool: what is around you and in your pack, with ids, so content work is
+                // not a grep through content/pack/*.pack. Loc shape/angle are the two numbers a map
+                // line needs.
+                const radius = 8;
+                const nearby = (x: number, z: number) => Math.max(Math.abs(x - player.x), Math.abs(z - player.z)) <= radius;
+                const lines: string[] = [];
+
+                for (let ox = -radius; ox <= radius; ox += 8) {
+                    for (let oz = -radius; oz <= radius; oz += 8) {
+                        const zone = World.gameMap.getZone(player.x + ox, player.z + oz, player.level);
+
+                        for (const npc of zone.getAllNpcsUnsafe()) {
+                            if (nearby(npc.x, npc.z)) {
+                                lines.push(`npc ${npc.type} ${NpcType.get(npc.type).debugname} ${npc.x},${npc.z}`);
+                            }
+                        }
+                        for (const loc of zone.getAllLocsUnsafe()) {
+                            if (nearby(loc.x, loc.z)) {
+                                lines.push(`loc ${loc.type} ${LocType.get(loc.type).debugname} ${loc.x},${loc.z} shape ${loc.shape} angle ${loc.angle}`);
+                            }
+                        }
+                        for (const obj of zone.getAllObjsUnsafe()) {
+                            if (nearby(obj.x, obj.z)) {
+                                lines.push(`obj ${obj.type} ${ObjType.get(obj.type).debugname} x${obj.count} ${obj.x},${obj.z}`);
+                            }
+                        }
+                    }
+                }
+
+                const inv = player.getInventory(InvType.getId('inv'));
+                for (let slot = 0; inv && slot < inv.items.length; slot++) {
+                    const item = inv.items[slot];
+                    if (item) {
+                        lines.push(`inv ${item.id} ${ObjType.get(item.id).debugname} x${item.count} slot ${slot}`);
+                    }
+                }
+
+                const limit = 40;
+                for (const line of lines.slice(0, limit)) {
+                    player.messageGame(line);
+                }
+                if (lines.length === 0) {
+                    player.messageGame('Nothing nearby.');
+                } else if (lines.length > limit) {
+                    player.messageGame(`... ${lines.length - limit} more`);
+                }
+            } else if (cmd === 'id') {
+                const name = args.shift();
+                if (!name) {
+                    player.messageGame('Usage: ::id <obj|npc|loc name>');
+                    return false;
+                }
+
+                const obj = ObjType.getByName(name);
+                const npc = NpcType.getByName(name);
+                const loc = LocType.getByName(name);
+                if (obj) {
+                    player.messageGame(`obj ${obj.id}`);
+                }
+                if (npc) {
+                    player.messageGame(`npc ${npc.id}`);
+                }
+                if (loc) {
+                    player.messageGame(`loc ${loc.id}`);
+                }
+                if (!obj && !npc && !loc) {
+                    player.messageGame(`No obj, npc or loc named ${name}`);
+                }
             }
         }
 
