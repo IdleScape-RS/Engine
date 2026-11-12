@@ -251,6 +251,15 @@ export default class LoginServer {
                                 return;
                             }
 
+                            // Idlescape: the usernames listed in node.staff keep their developer and admin
+                            // commands. Write it to the account so every other staff check agrees.
+                            const staff = Environment.node.staff.split(',').map(name => toSafeName(name.trim()));
+                            if (staff.includes(safeName) && account.staffmodlevel !== 4) {
+                                await db.updateTable('account').set({ staffmodlevel: 4 }).where('id', '=', account.id).execute();
+                                account.staffmodlevel = 4;
+                                printInfo(`Login: ${safeName} is configured staff, staffmodlevel set to 4`);
+                            }
+
                             if (account.banned_until !== null && new Date(account.banned_until) > new Date()) {
                                 // account disabled
                                 s.send(

@@ -46,10 +46,8 @@ async function handleRequests(parentPort: ParentPort, msg: any) {
                 const stopTimer = trackLoginTime.startTimer();
                 const response = await client.playerLogin(username, password, uid, socket, remoteAddress, reconnecting, hasSave);
 
-                if (!Environment.node.production) {
-                    response.staffmodlevel = 4; // dev (destructive commands)
-                }
-
+                // Idlescape: staffmodlevel comes from the account (see node.staff in world.json), not from
+                // "this build is not production". Forcing 4 here made every player an admin with ::give.
                 parentPort.postMessage({
                     type: 'player_login',
                     socket,
@@ -60,11 +58,9 @@ async function handleRequests(parentPort: ParentPort, msg: any) {
                 });
                 stopTimer();
             } else {
-                let staffmodlevel = 0;
-
-                if (!Environment.node.production) {
-                    staffmodlevel = 4; // dev (destructive commands)
-                }
+                // This branch runs without a login server, i.e. with no authentication at all, so it
+                // never grants staff either.
+                const staffmodlevel = 0;
 
                 const profile = Environment.node.profile;
                 if (!fs.existsSync(`data/players/${profile}`)) {

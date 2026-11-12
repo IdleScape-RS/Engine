@@ -34,6 +34,7 @@ export interface WorldConfig {
         debugProfile: boolean;
         clientRoutefinder: boolean;
         profile: string;
+        staff: string;
         maxConnected: number;
         debugProcChar: string;
         hopTime: number;
@@ -114,6 +115,7 @@ export function createDefaultWorldConfig(): WorldConfig {
             debugProfile: false,
             clientRoutefinder: true,
             profile: 'main',
+            staff: '',
             maxConnected: 1000,
             debugProcChar: '~',
             hopTime: 45000,
@@ -261,6 +263,7 @@ function migrateFromLegacyEnv(defaults: WorldConfig, env: Record<string, string>
     config.node.debugProfile = tryParseBoolean(env.NODE_DEBUG_PROFILE, config.node.debugProfile);
     config.node.clientRoutefinder = tryParseBoolean(env.NODE_CLIENT_ROUTEFINDER, config.node.clientRoutefinder);
     config.node.profile = tryParseString(env.NODE_PROFILE, config.node.profile);
+    config.node.staff = tryParseString(env.NODE_STAFF, config.node.staff);
     config.node.maxConnected = tryParseInt(env.NODE_MAX_CONNECTED, config.node.maxConnected);
     config.node.debugProcChar = tryParseString(env.NODE_DEBUGPROC_CHAR, config.node.debugProcChar);
     config.node.hopTime = tryParseInt(env.NODE_HOP_TIME, tryParseInt(env.NODE_MAX_NPCS, config.node.hopTime));

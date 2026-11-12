@@ -62,7 +62,7 @@ export default class OpHeldTHandler extends ClientGameMessageHandler<OpHeldT> {
         if (script) {
             player.executeScript(ScriptRunner.init(script, player), true);
         } else {
-            if (Environment.node.debug) {
+            if (Environment.node.debug && player.staffModLevel >= 2) {
                 player.messageGame(`No trigger for [opheldt,${spellCom.comName}]`);
             }
 
