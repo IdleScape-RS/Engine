@@ -6,6 +6,7 @@ import Fastify from 'fastify';
 import FastifyStatic from '@fastify/static';
 import FastifyView from '@fastify/view';
 import FastifyWebsocket from '@fastify/websocket';
+import forge from 'node-forge';
 import { register } from 'prom-client';
 
 import { CrcBuffer, CrcTable } from '#/cache/CrcTable.js';
@@ -16,6 +17,8 @@ import World from '#/engine/World.js';
 import NullClientSocket from '#/server/NullClientSocket.js';
 
 import { LoggerEventType } from '#/server/logger/LoggerEventType.js';
+
+import { registerDiscordAuth, sessionFor } from '#/server/login/DiscordAuth.js';
 
 import WSClientSocket from '#/server/ws/WSClientSocket.js';
 
@@ -136,6 +139,12 @@ fastify.route({
 });
 
 fastify.get<{ Querystring: { plugin?: string; lowmem?: string } }>('/rs2.cgi', async (req, reply) => {
+    // Idlescape: Discord is the only login, so there is no point handing out a client that cannot
+    // log in. No session cookie means the browser goes straight to Discord.
+    if (!(await sessionFor(req))) {
+        return reply.redirect('/discord', 302);
+    }
+
     const plugin = tryParseInt(req.query.plugin, 0);
     const lowmem = tryParseInt(req.query.lowmem, 0);
 
@@ -157,7 +166,21 @@ fastify.get<{ Querystring: { plugin?: string; lowmem?: string } }>('/rs2.cgi', a
 
 // cache routes
 
+// The web client asks for this instead of carrying a build-time copy of the key, so regenerating
+// data/config/private.pem can never leave the two sides disagreeing about the modulus.
+const loginPublicKey = (() => {
+    const priv = forge.pki.privateKeyFromPem(fs.readFileSync('data/config/private.pem', 'ascii'));
+    return { modulus: priv.n.toString(10), exponent: priv.e.toString(10) };
+})();
+
+fastify.get('/publickey', async (_req, reply) => {
+    reply.header('cache-control', 'no-store');
+    return loginPublicKey;
+});
+
 fastify.get('/crc:cachebust', async (_req, reply) => {
+    // A cached copy of this is how a client ends up sending stale checksums and being told to reload.
+    reply.header('cache-control', 'no-store');
     reply.send(CrcBuffer.data);
 });
 
@@ -300,6 +323,8 @@ if (Environment.node.debug) {
 fastify.register(FastifyStatic, {
     root: path.join(process.cwd(), 'public')
 });
+
+registerDiscordAuth(fastify);
 
 export async function startWeb() {
     await fastify.listen({ port: Environment.web.port, host: '0.0.0.0' });

@@ -1,13 +1,12 @@
 import type { ColumnType } from 'kysely';
-export type Generated<T> = T extends ColumnType<infer S, infer I, infer U>
-  ? ColumnType<S, I | undefined, U>
-  : ColumnType<T, T | undefined, T>;
+export type Generated<T> = T extends ColumnType<infer S, infer I, infer U> ? ColumnType<S, I | undefined, U> : ColumnType<T, T | undefined, T>;
 export type Timestamp = ColumnType<Date, Date | string, Date | string>;
 
 export type account = {
     id: Generated<number>;
     username: string;
     password: string;
+    discord_id: string | null;
     registration_ip: string | null;
     registration_date: Generated<string>;
     muted_until: string | null;
@@ -22,6 +21,12 @@ export type account_login = {
     login_time: string | null;
     logged_out: Generated<number>;
     logout_time: string | null;
+};
+export type account_session = {
+    web_token: string;
+    game_token: string | null;
+    account_id: number;
+    expires_at: string;
 };
 export type friendlist = {
     account_id: number;
@@ -116,6 +121,7 @@ export type session_wealth = {
 export type DB = {
     account: account;
     account_login: account_login;
+    account_session: account_session;
     friendlist: friendlist;
     hiscore: hiscore;
     hiscore_large: hiscore_large;

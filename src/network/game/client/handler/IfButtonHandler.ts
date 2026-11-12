@@ -32,7 +32,7 @@ export default class IfButtonHandler extends ClientGameMessageHandler<IfButton> 
             if (script) {
                 const root = Component.get(com.rootLayer);
                 player.executeScript(ScriptRunner.init(script, player), root.overlay == false);
-            } else if (Environment.node.debug) {
+            } else if (Environment.node.debug && player.staffModLevel >= 2) {
                 player.messageGame(`No trigger for [if_button,${com.comName}]`);
             }
         }

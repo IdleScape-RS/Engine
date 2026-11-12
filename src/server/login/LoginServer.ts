@@ -224,7 +224,23 @@ export default class LoginServer {
                                     .executeTakeFirst();
                             }
 
-                            if (!account || !(await bcrypt.compare(password.toLowerCase(), account.password))) {
+                            // Idlescape: the web client sends a single-use token from /discord/session instead of a password.
+                            const session = await db.selectFrom('account_session').selectAll().where('game_token', '=', password).executeTakeFirst();
+                            printInfo(`Login: ${safeName} passwordLength=${password.length} account=${account ? account.id : 'none'} sessionMatch=${session ? 'yes' : 'no'}`);
+
+                            if (session) {
+                                if (!account || session.account_id !== account.id || new Date(session.expires_at) <= new Date()) {
+                                    s.send(
+                                        JSON.stringify({
+                                            replyTo,
+                                            response: 1
+                                        })
+                                    );
+                                    return;
+                                }
+
+                                await db.updateTable('account_session').set({ game_token: null }).where('web_token', '=', session.web_token).execute();
+                            } else if (!account || !(await bcrypt.compare(password.toLowerCase(), account.password))) {
                                 // invalid username or password
                                 s.send(
                                     JSON.stringify({
@@ -233,6 +249,15 @@ export default class LoginServer {
                                     })
                                 );
                                 return;
+                            }
+
+                            // Idlescape: the usernames listed in node.staff keep their developer and admin
+                            // commands. Write it to the account so every other staff check agrees.
+                            const staff = Environment.node.staff.split(',').map(name => toSafeName(name.trim()));
+                            if (staff.includes(safeName) && account.staffmodlevel !== 4) {
+                                await db.updateTable('account').set({ staffmodlevel: 4 }).where('id', '=', account.id).execute();
+                                account.staffmodlevel = 4;
+                                printInfo(`Login: ${safeName} is configured staff, staffmodlevel set to 4`);
                             }
 
                             if (account.banned_until !== null && new Date(account.banned_until) > new Date()) {

@@ -1120,7 +1120,7 @@ export default class Player extends PathingEntity {
         const opTrigger = this.getOpTrigger();
         const apTrigger = this.getApTrigger();
 
-        if (!Environment.node.production && !opTrigger && !apTrigger) {
+        if (Environment.node.debug && this.staffModLevel >= 2 && !opTrigger && !apTrigger) {
             let debugname = '_';
             if (this.target instanceof Npc) {
                 const type = NpcType.get(this.target.type);

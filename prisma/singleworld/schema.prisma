@@ -21,6 +21,9 @@ model account {
     username String @unique
     password String
 
+    // Idlescape: Discord is the only login method, so every account is linked to exactly one Discord user.
+    discord_id String? @unique
+
     registration_ip   String?
     registration_date DateTime @default(now())
 
@@ -29,6 +32,16 @@ model account {
 
     staffmodlevel Int     @default(0)
     members       Boolean @default(false)
+}
+
+// Idlescape: a browser session (cookie) mints single-use game login tokens, so the client never sees a password.
+model account_session {
+    web_token  String  @id
+    game_token String? @unique
+    account_id Int
+    expires_at DateTime
+
+    @@index([account_id])
 }
 
 model account_login {

@@ -1,15 +1,11 @@
-import Player from '#/engine/entity/Player.js';
 import ClientGameMessageHandler from '#/network/game/client/ClientGameMessageHandler.js';
 import IdleTimer from '#/network/game/client/model/IdleTimer.js';
-import Environment from '#/util/Environment.js';
+import Player from '#/engine/entity/Player.js';
 
 export default class IdleTimerHandler extends ClientGameMessageHandler<IdleTimer> {
-    handle(_message: IdleTimer, player: Player): boolean {
-        if (!Environment.node.debug) {
-            // todo: staff command to stay logged in
-            player.requestIdleLogout = true;
-        }
-
+    handle(_message: IdleTimer, _player: Player): boolean {
+        // Idlescape is an idle game: the client reports that the player has stopped touching the controls,
+        // and we deliberately do nothing about it. There is no AFK logout.
         return true;
     }
 }

@@ -13,6 +13,12 @@ export interface WorldConfig {
         allowedOrigin: string;
         managementPort: number;
     };
+    discord: {
+        enabled: boolean;
+        clientId: string;
+        clientSecret: string;
+        redirectUrl: string;
+    };
     engine: {
         revision: number;
     };
@@ -28,6 +34,7 @@ export interface WorldConfig {
         debugProfile: boolean;
         clientRoutefinder: boolean;
         profile: string;
+        staff: string;
         maxConnected: number;
         debugProcChar: string;
         hopTime: number;
@@ -87,6 +94,12 @@ export function createDefaultWorldConfig(): WorldConfig {
             allowedOrigin: '',
             managementPort: 8898
         },
+        discord: {
+            enabled: false,
+            clientId: '',
+            clientSecret: '',
+            redirectUrl: ''
+        },
         engine: {
             revision: 289
         },
@@ -102,6 +115,7 @@ export function createDefaultWorldConfig(): WorldConfig {
             debugProfile: false,
             clientRoutefinder: true,
             profile: 'main',
+            staff: '',
             maxConnected: 1000,
             debugProcChar: '~',
             hopTime: 45000,
@@ -135,7 +149,9 @@ export function createDefaultWorldConfig(): WorldConfig {
         build: {
             verbose: false,
             startup: false,
-            verify: true,
+            // Idlescape content intentionally differs from upstream (names, costs, tree behaviour), so the
+            // upstream config checksums can never match. Set this back to true if you ever want that guard.
+            verify: false,
             verifyFolder: true,
             verifyPack: true,
             liveReload: true,
@@ -228,6 +244,12 @@ function migrateFromLegacyEnv(defaults: WorldConfig, env: Record<string, string>
     config.web.allowedOrigin = tryParseString(env.WEB_ALLOWED_ORIGIN, config.web.allowedOrigin);
     config.web.managementPort = tryParseInt(env.WEB_MANAGEMENT_PORT, config.web.managementPort);
 
+    // Deployments should keep the Discord secret out of world.json; the redirect URI differs per host.
+    config.discord.enabled = tryParseBoolean(env.DISCORD_ENABLED, config.discord.enabled);
+    config.discord.clientId = tryParseString(env.DISCORD_CLIENT_ID, config.discord.clientId);
+    config.discord.clientSecret = tryParseString(env.DISCORD_CLIENT_SECRET, config.discord.clientSecret);
+    config.discord.redirectUrl = tryParseString(env.DISCORD_REDIRECT_URL, config.discord.redirectUrl);
+
     config.engine.revision = tryParseInt(env.ENGINE_REVISION, config.engine.revision);
 
     config.node.id = tryParseInt(env.NODE_ID, config.node.id);
@@ -241,6 +263,7 @@ function migrateFromLegacyEnv(defaults: WorldConfig, env: Record<string, string>
     config.node.debugProfile = tryParseBoolean(env.NODE_DEBUG_PROFILE, config.node.debugProfile);
     config.node.clientRoutefinder = tryParseBoolean(env.NODE_CLIENT_ROUTEFINDER, config.node.clientRoutefinder);
     config.node.profile = tryParseString(env.NODE_PROFILE, config.node.profile);
+    config.node.staff = tryParseString(env.NODE_STAFF, config.node.staff);
     config.node.maxConnected = tryParseInt(env.NODE_MAX_CONNECTED, config.node.maxConnected);
     config.node.debugProcChar = tryParseString(env.NODE_DEBUGPROC_CHAR, config.node.debugProcChar);
     config.node.hopTime = tryParseInt(env.NODE_HOP_TIME, tryParseInt(env.NODE_MAX_NPCS, config.node.hopTime));
